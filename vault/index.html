@@ -231,6 +231,17 @@
   .icon-list .mini-btn{ width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
   .icon-list .mini-btn img, .card-icon img{ width:18px; height:18px; border-radius:4px; display:block; }
   .icon-selected{ background:var(--card-hover); outline:1px solid var(--brass-dim); }
+  .sync-p{ font-size:12.5px; color:var(--text-dim); line-height:1.55; margin-bottom:10px; }
+  .sync-p b{ color:var(--text); }
+  .modal textarea{
+    width:100%; background:var(--panel); border:1px solid var(--line);
+    color:var(--text); padding:9px 11px; border-radius:8px;
+    font-family:var(--font-mono); font-size:11px; line-height:1.4;
+    outline:none; resize:none; word-break:break-all;
+  }
+  .sync-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:1px; }
+  .sync-dot.ok{ background:var(--teal); }
+  .sync-dot.bad{ background:var(--danger); }
   .color-dot{
     width:22px; height:22px; border-radius:50%; cursor:pointer; border:2px solid transparent;
   }
@@ -314,6 +325,11 @@ let state = {
   openModal: null,   // null | {mode:'add'|'edit', entry:{...}}
   openMenuId: null,
   revealed: {},       // entryId -> bool
+  sync: null,        // null | {token, key, gistId}
+  syncStatus: null,  // null | 'ok' | 'error'
+  openSync: false,
+  syncBusy: false,
+  syncError: '',
 };
 
 function render(){
@@ -328,7 +344,100 @@ window.storage = {
   async set(key, value){ localStorage.setItem(key, value); return { key, value }; },
 };
 
+/* ---------------- Device sync via private GitHub Gist ----------------
+   Data is AES-256-GCM encrypted with a random key before it leaves the
+   browser; the sync code (token + key + gist id) is what other devices
+   paste once to join. */
+const SYNC_FILE = 'vault.json';
+
+function b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function unb64(str){ return Uint8Array.from(atob(str), c=>c.charCodeAt(0)); }
+
+function loadSyncCfg(){ try{ return JSON.parse(localStorage.getItem('vault-sync') || 'null'); }catch(e){ return null; } }
+function saveSyncCfg(cfg){ localStorage.setItem('vault-sync', JSON.stringify(cfg)); }
+function syncCode(cfg){ return 'VSYNC1.' + btoa(JSON.stringify(cfg)); }
+function parseSyncCode(s){
+  if(!s.startsWith('VSYNC1.')) return null;
+  try{
+    const cfg = JSON.parse(atob(s.slice(7)));
+    return (cfg && cfg.token && cfg.key && cfg.gistId) ? cfg : null;
+  }catch(e){ return null; }
+}
+
+async function importKeyB64(keyB64){
+  return crypto.subtle.importKey('raw', unb64(keyB64), 'AES-GCM', false, ['encrypt','decrypt']);
+}
+async function encryptJson(obj, keyB64){
+  const key = await importKeyB64(keyB64);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return JSON.stringify({ iv: b64(iv), data: b64(ct) });
+}
+async function decryptJson(str, keyB64){
+  const blob = JSON.parse(str);
+  const key = await importKeyB64(keyB64);
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv: unb64(blob.iv)}, key, unb64(blob.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+async function gistApi(method, path, cfg, body){
+  const res = await fetch('https://api.github.com' + path, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + cfg.token,
+      'Accept': 'application/vnd.github+json',
+      ...(body ? {'Content-Type':'application/json'} : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if(!res.ok) throw new Error('GitHub API ' + res.status);
+  return res.json();
+}
+
+async function pullFromGist(){
+  const cfg = state.sync;
+  const gist = await gistApi('GET', '/gists/' + cfg.gistId, cfg);
+  state.vault = await decryptJson(gist.files[SYNC_FILE].content, cfg.key);
+  await window.storage.set('vault-data', JSON.stringify(state.vault), false);
+}
+
+async function pushToGist(){
+  const cfg = state.sync;
+  const content = await encryptJson(state.vault, cfg.key);
+  await gistApi('PATCH', '/gists/' + cfg.gistId, cfg, { files: { [SYNC_FILE]: { content } } });
+}
+
+async function connectSync(input){
+  const code = parseSyncCode(input);
+  if(code){
+    // joining from another device: adopt the shared vault, keep any local-only entries
+    state.sync = code;
+    const localEntries = state.vault.entries;
+    await pullFromGist();
+    const extra = localEntries.filter(l => !state.vault.entries.some(g => g.id === l.id));
+    if(extra.length){
+      state.vault.entries = state.vault.entries.concat(extra);
+      await pushToGist();
+      await window.storage.set('vault-data', JSON.stringify(state.vault), false);
+    }
+    saveSyncCfg(code);
+    return;
+  }
+  // first device: treat input as a GitHub token, create the gist
+  const cfg = { token: input, key: b64(crypto.getRandomValues(new Uint8Array(32))), gistId: null };
+  const content = await encryptJson(state.vault, cfg.key);
+  const gist = await gistApi('POST', '/gists', cfg, {
+    description: 'Account Vault sync (notion-widgets)',
+    public: false,
+    files: { [SYNC_FILE]: { content } },
+  });
+  cfg.gistId = gist.id;
+  state.sync = cfg;
+  saveSyncCfg(cfg);
+}
+
 async function boot(){
+  state.sync = loadSyncCfg();
   try{
     const existing = await window.storage.get('vault-data', false);
     if(existing && existing.value){
@@ -337,10 +446,19 @@ async function boot(){
     }
   } catch(e){ /* corrupted or blocked storage — start empty */ }
   render();
+  if(state.sync){
+    try{ await pullFromGist(); state.syncStatus = 'ok'; }
+    catch(e){ state.syncStatus = 'error'; }
+    render();
+  }
 }
 
 async function persistVault(){
   await window.storage.set('vault-data', JSON.stringify(state.vault), false);
+  if(state.sync){
+    try{ await pushToGist(); state.syncStatus = 'ok'; }
+    catch(e){ state.syncStatus = 'error'; showToast('Sync failed — saved on this device only'); }
+  }
 }
 
 /* ---------------- Main UI ---------------- */
@@ -372,12 +490,42 @@ function mainScreen(){
       <div><h1>Account Vault</h1><span>${entries.length} account${entries.length!==1?'s':''}</span></div>
     </div>
     <div class="topbar-actions">
+      <button class="icon-btn" id="syncBtn">${state.sync ? `<span class="sync-dot ${state.syncStatus==='error'?'bad':'ok'}"></span>Sync` : 'Sync'}</button>
       <button class="icon-btn primary" id="addBtn">+ New account</button>
     </div>
   </div>
   <div class="content">${body}</div>
   ${state.openModal ? renderModal() : ''}
+  ${state.openSync ? renderSyncModal() : ''}
   `;
+}
+
+function renderSyncModal(){
+  const cfg = state.sync;
+  let body;
+  if(!cfg){
+    body = `
+      <p class="sync-p">Sync your accounts across devices through a private GitHub Gist. Data is encrypted before it leaves this browser.</p>
+      <p class="sync-p"><b>First device:</b> paste a GitHub token. Create one at <b>github.com/settings/tokens</b> → Generate new token (classic) → tick only <b>gist</b>.</p>
+      <p class="sync-p"><b>Other devices:</b> paste the sync code shown after connecting.</p>
+      <div class="field"><label>GitHub token or sync code</label><input type="password" id="syncInput" placeholder="ghp_… or VSYNC1.…" autocomplete="off"></div>
+      <div class="err">${state.syncError}</div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="closeSync">Cancel</button>
+        <button class="btn btn-primary" id="connectSyncBtn"${state.syncBusy?' disabled':''}>${state.syncBusy?'Connecting…':'Connect'}</button>
+      </div>`;
+  } else {
+    body = `
+      <p class="sync-p">Status: ${state.syncStatus==='error' ? '<span style="color:var(--danger)">last sync failed — check your connection or token</span>' : '<span style="color:var(--teal)">connected</span>'} · syncs when you open the widget and on every save.</p>
+      <p class="sync-p">Paste this sync code once in the widget on each of your other devices. <b>Keep it secret</b> — anyone with it can read your accounts.</p>
+      <div class="field"><textarea id="syncCodeBox" readonly rows="4">${syncCode(cfg)}</textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="disconnectSyncBtn">Disconnect</button>
+        <button class="btn btn-ghost" id="copySyncBtn">Copy code</button>
+        <button class="btn btn-primary" id="closeSync">Done</button>
+      </div>`;
+  }
+  return `<div class="overlay" id="syncOverlay"><div class="modal"><h3>Device sync</h3>${body}</div></div>`;
 }
 
 function renderGroup(cat, items){
@@ -488,6 +636,38 @@ function showToast(msg){
 }
 
 function bindMainEvents(){
+  const syncBtn = document.getElementById('syncBtn');
+  if(syncBtn) syncBtn.onclick = ()=>{ state.openSync = true; state.syncError = ''; render(); };
+
+  if(state.openSync){
+    const syncOverlay = document.getElementById('syncOverlay');
+    syncOverlay.onclick = (ev)=>{ if(ev.target.id === 'syncOverlay'){ state.openSync = false; render(); } };
+    document.getElementById('closeSync').onclick = ()=>{ state.openSync = false; render(); };
+    const connectBtn = document.getElementById('connectSyncBtn');
+    if(connectBtn) connectBtn.onclick = async ()=>{
+      const input = document.getElementById('syncInput').value.trim();
+      if(!input){ state.syncError = 'Paste a token or sync code first.'; render(); return; }
+      state.syncBusy = true; state.syncError = ''; render();
+      try{
+        await connectSync(input);
+        state.syncBusy = false; state.syncStatus = 'ok';
+        render(); showToast('Sync connected');
+      }catch(e){
+        state.syncBusy = false; state.sync = null; localStorage.removeItem('vault-sync');
+        state.syncError = 'Could not connect — check the token or code and try again.';
+        render();
+      }
+    };
+    const copyBtn = document.getElementById('copySyncBtn');
+    if(copyBtn) copyBtn.onclick = ()=>{ navigator.clipboard.writeText(syncCode(state.sync)).then(()=> showToast('Sync code copied')); };
+    const discBtn = document.getElementById('disconnectSyncBtn');
+    if(discBtn) discBtn.onclick = ()=>{
+      localStorage.removeItem('vault-sync');
+      state.sync = null; state.syncStatus = null;
+      render(); showToast('Sync disconnected on this device');
+    };
+  }
+
   const addBtn = document.getElementById('addBtn');
   if(addBtn) addBtn.onclick = ()=>{
     state.openModal = { mode:'add', entry:{ id:null, category: Object.keys(groupBy(state.vault.entries))[0] || 'Accounts', service:'', username:'', password: genPassword(), tag:'', icon: ICONS[0], colorIdx: 0 } };
