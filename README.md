@@ -8,7 +8,7 @@ Base URL: **https://yeuharng.github.io/notion-widgets/**
 
 | Widget | Live URL | Description |
 |---|---|---|
-| `vault/` | https://yeuharng.github.io/notion-widgets/vault/ | Account/password manager. Data lives in the visiting browser's `localStorage`; optional cross-device sync stores an AES-256-GCM-encrypted copy in a private GitHub Gist (set up via the Sync button — paste a GitHub token with only the `gist` scope on the first device, then the generated sync code on the others). Locally the data is unencrypted — anyone using the same device can see it. Nothing is ever stored in this repo. |
+| `vault/` | https://yeuharng.github.io/notion-widgets/vault/ | Account/password manager. Data lives in the visiting browser's `localStorage`; optional cross-device sync stores an AES-256-GCM-encrypted copy in a private GitHub Gist (set up via the Sync button — paste a GitHub token with only the `gist` scope on the first device, then the generated sync code on the others). Locally the data is unencrypted — anyone using the same device can see it. Nothing is ever stored in this repo. Supports isolated spaces via `?space=<name>` (e.g. `vault/?space=work`) — each space has its own data and its own sync. |
 
 ## How to add a new widget
 
