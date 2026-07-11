@@ -8,7 +8,7 @@ Base URL: **https://yeuharng.github.io/notion-widgets/**
 
 | Widget | Live URL | Description |
 |---|---|---|
-| `vault/` | https://yeuharng.github.io/notion-widgets/vault/ | Encrypted account/password vault. All data stays in the visiting browser's `localStorage`, encrypted with the Web Crypto API — nothing ever touches this repo or any server. |
+| `vault/` | https://yeuharng.github.io/notion-widgets/vault/ | Account/password manager. Data lives only in the visiting browser's `localStorage` (per device/browser, not synced) and is stored **unencrypted** — anyone using the same device can see it. Nothing ever touches this repo or any server. |
 
 ## How to add a new widget
 

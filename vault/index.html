@@ -262,11 +262,7 @@ const COLORS = [
 ];
 
 let state = {
-  screen: 'loading', // loading | setup | unlock | main
-  error: '',
-  vault: null,      // {entries:[], categories:[]}
-  cryptoKey: null,
-  salt: null,
+  vault: { entries: [] },
   openModal: null,   // null | {mode:'add'|'edit', entry:{...}}
   openMenuId: null,
   revealed: {},       // entryId -> bool
@@ -274,98 +270,8 @@ let state = {
 
 function render(){
   const root = document.getElementById('root');
-  if(state.screen === 'loading'){
-    root.innerHTML = `<div class="gate"><div class="gate-card"><div class="dial">${dialSvg()}</div><p class="sub">Opening vault…</p></div></div>`;
-    return;
-  }
-  if(state.screen === 'setup'){ root.innerHTML = setupScreen(); bindGateEvents('setup'); return; }
-  if(state.screen === 'unlock'){ root.innerHTML = unlockScreen(); bindGateEvents('unlock'); return; }
   root.innerHTML = mainScreen();
   bindMainEvents();
-}
-
-function dialSvg(){
-  return `<svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="5" y="11" width="14" height="9" rx="2"></rect>
-    <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
-  </svg>`;
-}
-
-function setupScreen(){
-  return `
-  <div class="gate"><div class="gate-card">
-    <div class="dial">${dialSvg()}</div>
-    <h1>Create your vault</h1>
-    <p class="sub">Set a master password to encrypt your entries.</p>
-    <div class="field"><label>Master password</label><input type="password" id="pw1" placeholder="At least 8 characters" autocomplete="new-password"></div>
-    <div class="field"><label>Confirm password</label><input type="password" id="pw2" placeholder="Re-enter password" autocomplete="new-password"></div>
-    <div class="err" id="gateErr">${state.error}</div>
-    <button class="btn btn-primary" id="setupBtn">Create vault</button>
-    <div class="gate-note">No password recovery — if you forget the master password, your data can't be decrypted.</div>
-  </div></div>`;
-}
-
-function unlockScreen(){
-  return `
-  <div class="gate"><div class="gate-card">
-    <div class="dial">${dialSvg()}</div>
-    <h1>Vault locked</h1>
-    <div class="field"><label>Master password</label><input type="password" id="pwUnlock" placeholder="••••••••" autocomplete="current-password"></div>
-    <div class="err" id="gateErr">${state.error}</div>
-    <button class="btn btn-primary" id="unlockBtn">Unlock</button>
-  </div></div>`;
-}
-
-function bindGateEvents(mode){
-  if(mode === 'setup'){
-    document.getElementById('setupBtn').onclick = async ()=>{
-      const p1 = document.getElementById('pw1').value;
-      const p2 = document.getElementById('pw2').value;
-      if(p1.length < 8){ state.error = 'Use at least 8 characters.'; render(); return; }
-      if(p1 !== p2){ state.error = 'Passwords do not match.'; render(); return; }
-      await createVault(p1);
-    };
-    ['pw1','pw2'].forEach(id=>{
-      document.getElementById(id).addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('setupBtn').click(); });
-    });
-  } else {
-    document.getElementById('unlockBtn').onclick = async ()=>{
-      const p = document.getElementById('pwUnlock').value;
-      await unlockVault(p);
-    };
-    document.getElementById('pwUnlock').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('unlockBtn').click(); });
-    document.getElementById('pwUnlock').focus();
-  }
-}
-
-/* ---------------- Crypto ---------------- */
-function b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
-function unb64(str){ return Uint8Array.from(atob(str), c=>c.charCodeAt(0)); }
-
-async function deriveKey(password, saltBytes){
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    { name:'PBKDF2', salt: saltBytes, iterations: 150000, hash:'SHA-256' },
-    baseKey,
-    { name:'AES-GCM', length:256 },
-    false,
-    ['encrypt','decrypt']
-  );
-}
-
-async function encryptVault(vaultObj, key){
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const enc = new TextEncoder();
-  const ciphertext = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(JSON.stringify(vaultObj)));
-  return { iv: b64(iv), data: b64(ciphertext) };
-}
-
-async function decryptVault(blob, key){
-  const iv = unb64(blob.iv);
-  const data = unb64(blob.data);
-  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, data);
-  return JSON.parse(new TextDecoder().decode(plain));
 }
 
 /* ---------------- Storage (localStorage-backed) ---------------- */
@@ -374,75 +280,19 @@ window.storage = {
   async set(key, value){ localStorage.setItem(key, value); return { key, value }; },
 };
 
-/* ---------------- Storage flow ---------------- */
 async function boot(){
   try{
-    const existing = await window.storage.get('vault-blob', false);
+    const existing = await window.storage.get('vault-data', false);
     if(existing && existing.value){
-      state.screen = 'unlock';
-    } else {
-      state.screen = 'setup';
+      const parsed = JSON.parse(existing.value);
+      state.vault = { entries: parsed.entries || [] };
     }
-  } catch(e){
-    state.screen = 'setup';
-  }
+  } catch(e){ /* corrupted or blocked storage — start empty */ }
   render();
-}
-
-async function createVault(password){
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await deriveKey(password, salt);
-  const vaultObj = { entries: [] };
-  const enc = await encryptVault(vaultObj, key);
-  const payload = { salt: b64(salt), iv: enc.iv, data: enc.data };
-  try{
-    await window.storage.set('vault-blob', JSON.stringify(payload), false);
-    state.cryptoKey = key;
-    state.salt = salt;
-    state.vault = vaultObj;
-    state.screen = 'main';
-    state.error = '';
-    render();
-  } catch(e){
-    state.error = 'Could not save vault. Try again.';
-    render();
-  }
-}
-
-async function unlockVault(password){
-  try{
-    const existing = await window.storage.get('vault-blob', false);
-    const payload = JSON.parse(existing.value);
-    const salt = unb64(payload.salt);
-    const key = await deriveKey(password, salt);
-    const vaultObj = await decryptVault(payload, key);
-    state.cryptoKey = key;
-    state.salt = salt;
-    state.vault = vaultObj;
-    state.screen = 'main';
-    state.error = '';
-    render();
-  } catch(e){
-    state.error = 'Wrong password, or vault could not be read.';
-    render();
-  }
 }
 
 async function persistVault(){
-  const salt = state.salt;
-  const enc = await encryptVault(state.vault, state.cryptoKey);
-  const payload = { salt: b64(salt), iv: enc.iv, data: enc.data };
-  await window.storage.set('vault-blob', JSON.stringify(payload), false);
-}
-
-function lockVault(){
-  state.cryptoKey = null;
-  state.salt = null;
-  state.vault = null;
-  state.revealed = {};
-  state.screen = 'unlock';
-  state.error = '';
-  render();
+  await window.storage.set('vault-data', JSON.stringify(state.vault), false);
 }
 
 /* ---------------- Main UI ---------------- */
@@ -474,7 +324,6 @@ function mainScreen(){
       <div><h1>Account Vault</h1><span>${entries.length} account${entries.length!==1?'s':''}</span></div>
     </div>
     <div class="topbar-actions">
-      <button class="icon-btn" id="lockBtn">Lock</button>
       <button class="icon-btn primary" id="addBtn">+ New account</button>
     </div>
   </div>
@@ -587,9 +436,6 @@ function showToast(msg){
 }
 
 function bindMainEvents(){
-  const lockBtn = document.getElementById('lockBtn');
-  if(lockBtn) lockBtn.onclick = lockVault;
-
   const addBtn = document.getElementById('addBtn');
   if(addBtn) addBtn.onclick = ()=>{
     state.openModal = { mode:'add', entry:{ id:null, category: Object.keys(groupBy(state.vault.entries))[0] || 'Accounts', service:'', username:'', password: genPassword(), tag:'', icon: ICONS[0], colorIdx: 0 } };
