@@ -296,12 +296,12 @@ function setupScreen(){
   <div class="gate"><div class="gate-card">
     <div class="dial">${dialSvg()}</div>
     <h1>Create your vault</h1>
-    <p class="sub">Set a master password. It never leaves this widget — entries are encrypted with it before anything is saved.</p>
+    <p class="sub">Set a master password to encrypt your entries.</p>
     <div class="field"><label>Master password</label><input type="password" id="pw1" placeholder="At least 8 characters" autocomplete="new-password"></div>
     <div class="field"><label>Confirm password</label><input type="password" id="pw2" placeholder="Re-enter password" autocomplete="new-password"></div>
     <div class="err" id="gateErr">${state.error}</div>
     <button class="btn btn-primary" id="setupBtn">Create vault</button>
-    <div class="gate-note">Encrypted with AES-256-GCM, key derived via PBKDF2 (150,000 rounds). There's no password recovery — if you forget it, the data can't be decrypted. This is a personal convenience tool, not a substitute for an audited password manager.</div>
+    <div class="gate-note">No password recovery — if you forget the master password, your data can't be decrypted.</div>
   </div></div>`;
 }
 
@@ -310,7 +310,6 @@ function unlockScreen(){
   <div class="gate"><div class="gate-card">
     <div class="dial">${dialSvg()}</div>
     <h1>Vault locked</h1>
-    <p class="sub">Enter your master password to unlock.</p>
     <div class="field"><label>Master password</label><input type="password" id="pwUnlock" placeholder="••••••••" autocomplete="current-password"></div>
     <div class="err" id="gateErr">${state.error}</div>
     <button class="btn btn-primary" id="unlockBtn">Unlock</button>
@@ -368,6 +367,12 @@ async function decryptVault(blob, key){
   const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, data);
   return JSON.parse(new TextDecoder().decode(plain));
 }
+
+/* ---------------- Storage (localStorage-backed) ---------------- */
+window.storage = {
+  async get(key){ const value = localStorage.getItem(key); return value === null ? null : { key, value }; },
+  async set(key, value){ localStorage.setItem(key, value); return { key, value }; },
+};
 
 /* ---------------- Storage flow ---------------- */
 async function boot(){
@@ -466,7 +471,7 @@ function mainScreen(){
   <div class="topbar">
     <div class="brand">
       <span class="dot"></span>
-      <div><h1>Account Vault</h1><span>${entries.length} account${entries.length!==1?'s':''} · encrypted</span></div>
+      <div><h1>Account Vault</h1><span>${entries.length} account${entries.length!==1?'s':''}</span></div>
     </div>
     <div class="topbar-actions">
       <button class="icon-btn" id="lockBtn">Lock</button>
