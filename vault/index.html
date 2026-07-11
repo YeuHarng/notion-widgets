@@ -523,15 +523,24 @@ function bindMainEvents(){
   });
 
   if(state.openModal){
+    // keep typed values across re-renders triggered by icon/color selection
+    const syncModalFields = ()=>{
+      const e = state.openModal.entry;
+      e.category = document.getElementById('f_category').value;
+      e.service = document.getElementById('f_service').value;
+      e.username = document.getElementById('f_username').value;
+      e.password = document.getElementById('f_password').value;
+      e.tag = document.getElementById('f_tag').value;
+    };
     const overlay = document.getElementById('overlay');
     overlay.onclick = (ev)=>{ if(ev.target.id === 'overlay'){ state.openModal = null; render(); } };
     document.getElementById('cancelModal').onclick = ()=>{ state.openModal = null; render(); };
     document.getElementById('genPwBtn').onclick = ()=>{ document.getElementById('f_password').value = genPassword(); };
     document.querySelectorAll('[data-icon]').forEach(el=>{
-      el.onclick = ()=>{ state.openModal.entry.icon = el.getAttribute('data-icon'); render(); };
+      el.onclick = ()=>{ syncModalFields(); state.openModal.entry.icon = el.getAttribute('data-icon'); render(); };
     });
     document.querySelectorAll('[data-color]').forEach(el=>{
-      el.onclick = ()=>{ state.openModal.entry.colorIdx = parseInt(el.getAttribute('data-color')); render(); };
+      el.onclick = ()=>{ syncModalFields(); state.openModal.entry.colorIdx = parseInt(el.getAttribute('data-color')); render(); };
     });
     document.getElementById('saveModal').onclick = async ()=>{
       const m = state.openModal;
