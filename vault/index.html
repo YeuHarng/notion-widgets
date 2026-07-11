@@ -227,6 +227,10 @@
   }
   .modal-actions{ display:flex; gap:10px; margin-top:20px; }
   .color-picker{ display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; }
+  .icon-list{ gap:4px; max-height:118px; overflow-y:auto; padding:2px; }
+  .icon-list .mini-btn{ width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
+  .icon-list .mini-btn img, .card-icon img{ width:18px; height:18px; border-radius:4px; display:block; }
+  .icon-selected{ background:var(--card-hover); outline:1px solid var(--brass-dim); }
   .color-dot{
     width:22px; height:22px; border-radius:50%; cursor:pointer; border:2px solid transparent;
   }
@@ -252,6 +256,50 @@
 
 <script>
 const ICONS = ['📷','📘','🎵','🎮','✉️','☁️','💬','🔒','💼','🎬','🛒','🏦','💻','📁','⭐'];
+
+/* Brand icons: stored as 'd:<domain>', rendered via Google's favicon service */
+const BRANDS = [
+  {name:'Gmail', domain:'gmail.com'},
+  {name:'Google', domain:'google.com'},
+  {name:'Instagram', domain:'instagram.com'},
+  {name:'Facebook', domain:'facebook.com'},
+  {name:'X (Twitter)', domain:'x.com'},
+  {name:'TikTok', domain:'tiktok.com'},
+  {name:'YouTube', domain:'youtube.com'},
+  {name:'WhatsApp', domain:'whatsapp.com'},
+  {name:'Telegram', domain:'telegram.org'},
+  {name:'WeChat', domain:'wechat.com'},
+  {name:'Discord', domain:'discord.com'},
+  {name:'Reddit', domain:'reddit.com'},
+  {name:'LinkedIn', domain:'linkedin.com'},
+  {name:'GitHub', domain:'github.com'},
+  {name:'Microsoft', domain:'microsoft.com'},
+  {name:'Apple', domain:'apple.com'},
+  {name:'Netflix', domain:'netflix.com'},
+  {name:'Spotify', domain:'spotify.com'},
+  {name:'Steam', domain:'steampowered.com'},
+  {name:'PayPal', domain:'paypal.com'},
+  {name:'Amazon', domain:'amazon.com'},
+  {name:'Shopee', domain:'shopee.com.my'},
+  {name:'Lazada', domain:'lazada.com.my'},
+  {name:'Grab', domain:'grab.com'},
+  {name:"Touch 'n Go", domain:'tngdigital.com.my'},
+  {name:'Maybank', domain:'maybank2u.com.my'},
+  {name:'CIMB', domain:'cimb.com.my'},
+  {name:'Binance', domain:'binance.com'},
+  {name:'Notion', domain:'notion.so'},
+  {name:'Canva', domain:'canva.com'},
+  {name:'ChatGPT', domain:'chatgpt.com'},
+  {name:'Claude', domain:'claude.ai'},
+  {name:'TradingView', domain:'tradingview.com'},
+];
+
+function renderIcon(icon){
+  if(icon && icon.startsWith('d:')){
+    return `<img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(icon.slice(2))}&sz=64" alt="">`;
+  }
+  return escapeHtml(icon || '⭐');
+}
 const COLORS = [
   {bg:'#2E2416', fg:'#D4A94E'}, // brass
   {bg:'#1E2B2A', fg:'#5AACA4'}, // teal
@@ -353,7 +401,7 @@ function renderCard(entry){
   return `
   <div class="card">
     <div class="card-head">
-      <div class="card-icon" style="background:${color.bg}; color:${color.fg};">${entry.icon}</div>
+      <div class="card-icon" style="background:${color.bg}; color:${color.fg};">${renderIcon(entry.icon)}</div>
       <div class="card-title">${escapeHtml(entry.service)}</div>
       <div class="fab-menu">
         <div class="card-menu" data-menu="${entry.id}">⋯</div>
@@ -404,7 +452,11 @@ function renderModal(){
       </div>
       <div class="field">
         <label>Icon</label>
-        <div class="color-picker">${ICONS.map(ic=>`<span class="mini-btn" data-icon="${ic}" style="font-size:16px; ${e.icon===ic?'background:var(--card-hover);border-radius:6px;':''}">${ic}</span>`).join('')}</div>
+        <div class="color-picker icon-list">${
+          BRANDS.map(b=>`<span class="mini-btn ${e.icon==='d:'+b.domain?'icon-selected':''}" data-icon="d:${b.domain}" title="${escapeHtml(b.name)}">${renderIcon('d:'+b.domain)}</span>`).join('')
+        }${
+          ICONS.map(ic=>`<span class="mini-btn ${e.icon===ic?'icon-selected':''}" data-icon="${ic}" style="font-size:16px;">${ic}</span>`).join('')
+        }</div>
       </div>
       <div class="field">
         <label>Color</label>
