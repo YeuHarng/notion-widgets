@@ -634,6 +634,27 @@ function genPassword(len=16){
   return Array.from(arr, n => chars[n % chars.length]).join('');
 }
 
+async function copyText(val){
+  try{
+    await navigator.clipboard.writeText(val);
+    return true;
+  }catch(e){
+    // embed iframes (e.g. Notion) often block the async clipboard API — fall back
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = val;
+      ta.setAttribute('readonly','');
+      ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    }catch(e2){ return false; }
+  }
+}
+
 function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -665,7 +686,7 @@ function bindMainEvents(){
       }
     };
     const copyBtn = document.getElementById('copySyncBtn');
-    if(copyBtn) copyBtn.onclick = ()=>{ navigator.clipboard.writeText(syncCode(state.sync)).then(()=> showToast('Sync code copied')); };
+    if(copyBtn) copyBtn.onclick = async ()=>{ showToast(await copyText(syncCode(state.sync)) ? 'Sync code copied' : 'Copy blocked — select the code and copy manually'); };
     const discBtn = document.getElementById('disconnectSyncBtn');
     if(discBtn) discBtn.onclick = ()=>{
       localStorage.removeItem(SYNC_KEY);
@@ -704,7 +725,7 @@ function bindMainEvents(){
       const [id, field] = el.getAttribute('data-copy').split(':');
       const entry = state.vault.entries.find(x=>x.id===id);
       const val = field === 'user' ? entry.username : entry.password;
-      navigator.clipboard.writeText(val).then(()=> showToast(field==='user' ? 'Username copied' : 'Password copied'));
+      copyText(val).then(ok => showToast(ok ? (field==='user' ? 'Username copied' : 'Password copied') : 'Copy blocked by this app'));
     };
   });
 
