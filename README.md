@@ -10,6 +10,8 @@ Base URL: **https://yeuharng.github.io/notion-widgets/**
 |---|---|---|
 | `vault/` | https://yeuharng.github.io/notion-widgets/vault/ | Account/password manager. Data lives in the visiting browser's `localStorage`; optional cross-device sync stores an AES-256-GCM-encrypted copy in a private GitHub Gist (set up via the Sync button — paste a GitHub token with only the `gist` scope on the first device, then the generated sync code on the others). Locally the data is unencrypted — anyone using the same device can see it. Nothing is ever stored in this repo. Supports isolated spaces via `?space=<name>` (e.g. `vault/?space=work`) — each space has its own data and its own sync. |
 
+| `offwork/` | https://yeuharng.github.io/notion-widgets/offwork/ | Off-work countdown (打工人下班倒计时). Counts down to 6 pm with a workday progress bar and rotating jokes; celebrates after hours, mocks you on weekends. Configurable via `?start=9&end=18`. Stateless — no data stored. |
+
 ## How to add a new widget
 
 1. Create a new subfolder with its own `index.html`:

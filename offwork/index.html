@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>下班倒计时</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #15161A;
+    --card: #1D1F24;
+    --line: #33353C;
+    --text: #ECECEC;
+    --text-dim: #9A9CA5;
+    --text-faint: #6C6E76;
+    --brass: #D4A94E;
+    --teal: #5AACA4;
+    --danger: #D97757;
+    --font-body: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--font-body); background:var(--bg); color:var(--text);
+    display:flex; align-items:center; justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+  .card{
+    width:100%; max-width:420px; padding:28px 26px;
+    text-align:center;
+  }
+  .label{
+    font-size:12px; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--text-faint); font-weight:600; margin-bottom:10px;
+  }
+  .timer{
+    font-family:var(--font-mono); font-weight:700;
+    font-size:clamp(44px, 16vw, 72px); line-height:1.05;
+    color:var(--brass); font-variant-numeric:tabular-nums;
+  }
+  .timer.free{ color:var(--teal); }
+  .timer.rush{ color:var(--danger); animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.55;} }
+  .quip{
+    margin-top:12px; font-size:14px; color:var(--text-dim); min-height:20px;
+  }
+  .bar-wrap{ margin-top:22px; }
+  .bar-head{
+    display:flex; justify-content:space-between; font-size:11.5px;
+    color:var(--text-faint); font-family:var(--font-mono); margin-bottom:7px;
+  }
+  .bar{
+    height:8px; background:var(--card); border:1px solid var(--line);
+    border-radius:99px; overflow:hidden;
+  }
+  .bar-fill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--brass), var(--teal));
+    border-radius:99px; transition:width 1s linear;
+  }
+  .meta{
+    margin-top:16px; font-size:11.5px; color:var(--text-faint);
+    font-family:var(--font-mono);
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="label" id="label">距离下班还有</div>
+  <div class="timer" id="timer">--:--:--</div>
+  <div class="quip" id="quip"></div>
+  <div class="bar-wrap" id="barWrap">
+    <div class="bar-head"><span>今日刑期</span><span id="pct">0%</span></div>
+    <div class="bar"><div class="bar-fill" id="fill"></div></div>
+  </div>
+  <div class="meta" id="meta"></div>
+</div>
+
+<script>
+/* Config via URL: ?start=9&end=18 (24h). ?now=HH:MM simulates time for testing. */
+const q = new URLSearchParams(location.search);
+const START_H = parseFloat(q.get('start') ?? '9');
+const END_H = parseFloat(q.get('end') ?? '18');
+
+const QUIPS = {
+  early:   ['咖啡还没凉，别急', '今天也是元气满满的打工人', '刚坐下就想跑？我懂', '先假装看一会儿邮件'],
+  mid:     ['摸鱼要讲究节奏感', '假装在敲代码中…', '去倒杯水，消耗五分钟', '会议里点头就行，我教你的'],
+  half:    ['过半了，胜利在望…个鬼', '午饭是一天唯一的盼头', '下午更难熬，做好心理准备'],
+  slump:   ['最困的时段到了，撑住', '工资在向你招手', '别睡，摄像头可能开着', '眼睛睁着，灵魂出走'],
+  rush:    ['收拾心情，准备跑路', '最后冲刺，装忙一点', '别接新需求！千万别接！', '鼠标可以先握住了'],
+  before:  ['珍惜最后的自由时光', '还没上班，看什么倒计时', '再睡五分钟没关系的'],
+  after:   ['跑！现在就跑！', '别回头，明天再说', '今天的班已经上完了，赢'],
+  weekend: ['今天周末，你居然在看这个？', '关掉 Notion，去玩', '周末看下班倒计时，是有多爱上班'],
+};
+let quipPool = [], quipIdx = 0, lastPhase = '';
+
+function fmt(ms){
+  const s = Math.max(0, Math.floor(ms/1000));
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor(s%3600/60)).padStart(2,'0');
+  const sec = String(s%60).padStart(2,'0');
+  return `${h}:${m}:${sec}`;
+}
+
+function now(){
+  const n = new Date();
+  const sim = q.get('now');
+  if(sim){
+    const [h,m] = sim.split(':').map(Number);
+    n.setHours(h, m||0, 0, 0);
+  }
+  const simDay = q.get('day'); // 0=Sun … 6=Sat, testing only
+  if(simDay !== null){
+    n.setDate(n.getDate() + (parseInt(simDay) - n.getDay()));
+  }
+  return n;
+}
+
+function setQuips(phase){
+  if(phase === lastPhase) return;
+  lastPhase = phase;
+  quipPool = QUIPS[phase]; quipIdx = Math.floor(Math.random()*quipPool.length);
+  document.getElementById('quip').textContent = quipPool[quipIdx];
+}
+
+function rotateQuip(){
+  if(!quipPool.length) return;
+  quipIdx = (quipIdx+1) % quipPool.length;
+  document.getElementById('quip').textContent = quipPool[quipIdx];
+}
+
+function tick(){
+  const n = now();
+  const label = document.getElementById('label');
+  const timer = document.getElementById('timer');
+  const barWrap = document.getElementById('barWrap');
+  const meta = document.getElementById('meta');
+  const day = n.getDay();
+
+  const start = new Date(n); start.setHours(Math.floor(START_H), (START_H%1)*60, 0, 0);
+  const end = new Date(n); end.setHours(Math.floor(END_H), (END_H%1)*60, 0, 0);
+
+  meta.textContent = n.toLocaleTimeString('en-GB') + ' · ' + ['周日','周一','周二','周三','周四','周五','周六'][day];
+
+  if(day === 0 || day === 6){
+    label.textContent = '今天不用上班';
+    timer.textContent = '🎉';
+    timer.className = 'timer free';
+    barWrap.style.display = 'none';
+    setQuips('weekend');
+    return;
+  }
+
+  if(n < start){
+    label.textContent = '距离上班还有';
+    timer.textContent = fmt(start - n);
+    timer.className = 'timer free';
+    barWrap.style.display = 'none';
+    setQuips('before');
+    return;
+  }
+
+  if(n >= end){
+    label.textContent = '已经自由了';
+    timer.textContent = fmt(n - end);
+    timer.className = 'timer free';
+    barWrap.style.display = 'none';
+    setQuips('after');
+    return;
+  }
+
+  // working hours
+  const total = end - start;
+  const done = n - start;
+  const pctVal = done / total * 100;
+  label.textContent = '距离下班还有';
+  timer.textContent = fmt(end - n);
+  timer.className = 'timer' + (pctVal >= 90 ? ' rush' : '');
+  barWrap.style.display = '';
+  document.getElementById('fill').style.width = pctVal.toFixed(2) + '%';
+  document.getElementById('pct').textContent = pctVal.toFixed(1) + '%';
+
+  const phase = pctVal < 15 ? 'early' : pctVal < 40 ? 'mid' : pctVal < 60 ? 'half' : pctVal < 85 ? 'slump' : 'rush';
+  setQuips(phase);
+}
+
+tick();
+setInterval(tick, 1000);
+setInterval(rotateQuip, 15000);
+</script>
+</body>
+</html>
