@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Off-Work Countdown · Playful</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brass:#F2B84B; --teal:#5FD4C4; --danger:#FF6B5E; --purple:#8E9BFF;
+    --dim:#A7A9B3; --faint:#63656E;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:#000; color:#F5F5F5;
+    font-family:'Nunito',-apple-system,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .card{
+    position:relative; width:100%; max-width:410px; margin:14px;
+    padding:26px 26px 24px; border-radius:22px; text-align:center;
+    background:linear-gradient(#0C0C0F,#0C0C0F) padding-box,
+               linear-gradient(135deg,var(--brass),var(--teal)) border-box;
+    border:2px solid transparent;
+  }
+  @keyframes shake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
+  .card.rush{ animation:shake 0.35s linear infinite; }
+  .bubble{
+    display:inline-block; max-width:90%; margin-bottom:12px;
+    background:#1B1C22; border:1px solid #2C2D35; border-radius:14px;
+    padding:8px 14px; font-size:13.5px; font-weight:700; color:var(--dim);
+    position:relative; min-height:20px;
+  }
+  .bubble::after{
+    content:''; position:absolute; bottom:-7px; left:50%; transform:translateX(-50%) rotate(45deg);
+    width:12px; height:12px; background:#1B1C22;
+    border-right:1px solid #2C2D35; border-bottom:1px solid #2C2D35;
+  }
+  .sticker{
+    width:128px; height:128px; margin:2px auto 10px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #FFFDF7, #FFEFD2);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 10px 34px rgba(242,184,75,0.22);
+  }
+  .sticker img{ width:98px; height:98px; object-fit:contain; }
+  @keyframes bob{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(-8px) rotate(-3deg);} }
+  @keyframes party{ 0%,100%{transform:translateY(0) scale(1);} 50%{transform:translateY(-14px) scale(1.1);} }
+  @keyframes snooze{ 0%,100%{transform:rotate(-5deg);} 50%{transform:rotate(5deg) translateY(5px);} }
+  .sticker.calm{ animation:bob 2.4s ease-in-out infinite; }
+  .sticker.hyper{ animation:party 0.65s ease-in-out infinite; }
+  .sticker.sleepy{ animation:snooze 3s ease-in-out infinite; }
+  .label{
+    font-size:12px; letter-spacing:0.22em; text-transform:uppercase;
+    color:var(--faint); font-weight:900; margin-bottom:4px;
+  }
+  .timer{
+    font-family:'JetBrains Mono',monospace; font-weight:700;
+    font-size:clamp(42px,14vw,62px); line-height:1.08;
+    font-variant-numeric:tabular-nums; color:var(--brass);
+  }
+  .timer.free{ color:var(--teal); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+  .timer.rush{ color:var(--danger); animation:pulse 1s infinite; }
+  .bar-wrap{ margin-top:20px; }
+  .bar-head{
+    display:flex; justify-content:space-between; font-size:11px; font-weight:900;
+    letter-spacing:0.1em; text-transform:uppercase; color:var(--faint); margin-bottom:8px;
+  }
+  .bar-track{ position:relative; height:14px; }
+  .bar{
+    height:14px; background:#1B1C22; border-radius:99px; overflow:hidden;
+  }
+  .bar-fill{
+    height:100%; width:0%; border-radius:99px;
+    background:linear-gradient(90deg,var(--brass),var(--teal));
+    transition:width 1s linear;
+  }
+  .runner{
+    position:absolute; top:50%; left:0%;
+    transform:translate(-50%,-58%); font-size:17px;
+    transition:left 1s linear; filter:drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+  }
+  .meta{ margin-top:16px; font-size:11px; color:var(--faint); font-family:'JetBrains Mono',monospace; font-weight:700; }
+  .confetti-layer{ position:fixed; inset:0; overflow:hidden; pointer-events:none; }
+  @keyframes fall{ 0%{ transform:translateY(-30px) rotate(0); opacity:1; } 100%{ transform:translateY(105vh) rotate(360deg); opacity:0.1; } }
+  .confetti-layer i{ position:absolute; top:-30px; border-radius:2px; animation:fall linear infinite; }
+</style>
+</head>
+<body>
+<div class="confetti-layer" id="confetti" style="display:none"></div>
+<div class="card" id="card">
+  <div class="bubble" id="quip"></div>
+  <div class="sticker calm" id="sticker"><img src="cat.gif" alt="cat"></div>
+  <div class="label" id="label">Time until freedom</div>
+  <div class="timer" id="timer">--:--:--</div>
+  <div class="bar-wrap" id="barWrap">
+    <div class="bar-head"><span>Today's sentence</span><span id="pct">0%</span></div>
+    <div class="bar-track">
+      <div class="bar"><div class="bar-fill" id="fill"></div></div>
+      <div class="runner" id="runner">🏃</div>
+    </div>
+  </div>
+  <div class="meta" id="meta"></div>
+</div>
+<script src="shared.js"></script>
+<script>
+(function makeConfetti(){
+  const layer = document.getElementById('confetti');
+  const colors = ['#F2B84B','#5FD4C4','#FF6B5E','#8E9BFF'];
+  for(let i=0;i<30;i++){
+    const el = document.createElement('i');
+    const size = 6 + (i%3)*3;
+    el.style.cssText = `left:${(i*37)%100}%; width:${size}px; height:${size*0.55}px; background:${colors[i%4]}; animation-duration:${(2+(i%5)*0.35).toFixed(2)}s; animation-delay:${((i%10)*0.2).toFixed(2)}s;`;
+    layer.appendChild(el);
+  }
+})();
+window.applyQuip = t => document.getElementById('quip').textContent = t;
+window.applyState = s => {
+  document.getElementById('label').textContent = s.label;
+  document.getElementById('timer').textContent = s.timer;
+  document.getElementById('quip').textContent = s.quip;
+  document.getElementById('meta').textContent = s.meta;
+  const free = s.mode !== 'work';
+  const rush = s.phase === 'rush';
+  document.getElementById('timer').className = 'timer' + (free ? ' free' : rush ? ' rush' : '');
+  document.getElementById('card').className = 'card' + (rush ? ' rush' : '');
+  document.getElementById('sticker').className = 'sticker ' + (rush || s.phase === 'after' || s.phase === 'weekend' ? 'hyper' : s.phase === 'slump' || s.phase === 'before' ? 'sleepy' : 'calm');
+  document.getElementById('confetti').style.display = (s.phase === 'after' || s.phase === 'weekend') ? '' : 'none';
+  document.getElementById('barWrap').style.display = s.pct === null ? 'none' : '';
+  if(s.pct !== null){
+    document.getElementById('fill').style.width = s.pct.toFixed(2) + '%';
+    document.getElementById('pct').textContent = s.pct.toFixed(1) + '%';
+    document.getElementById('runner').style.left = s.pct.toFixed(2) + '%';
+  }
+};
+startEngine();
+</script>
+</body>
+</html>

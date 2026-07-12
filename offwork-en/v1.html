@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Off-Work Countdown · Minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brass:#D4A94E; --teal:#5AACA4; --danger:#E5735A;
+    --dim:#8A8C95; --faint:#5A5C64;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:#000; color:#F2F2F2;
+    font-family:'Inter',-apple-system,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ width:100%; max-width:400px; padding:32px 24px; text-align:center; }
+  .sticker{
+    width:104px; height:104px; margin:0 auto 18px; border-radius:50%;
+    background:#FFF7EA; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.06), 0 8px 30px rgba(212,169,78,0.12);
+  }
+  .sticker img{ width:78px; height:78px; object-fit:contain; }
+  @keyframes bob{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(-7px);} }
+  @keyframes zoom{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.12);} }
+  @keyframes droop{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(4deg) translateY(4px);} }
+  .sticker.calm{ animation:bob 2.6s ease-in-out infinite; }
+  .sticker.sleepy{ animation:droop 3s ease-in-out infinite; }
+  .sticker.hyper{ animation:zoom 0.7s ease-in-out infinite; }
+  .label{
+    font-size:11px; letter-spacing:0.3em; text-transform:uppercase;
+    color:var(--faint); font-weight:600; margin-bottom:8px;
+  }
+  .timer{
+    font-family:'JetBrains Mono',monospace; font-weight:700;
+    font-size:clamp(46px,15vw,68px); line-height:1.05;
+    font-variant-numeric:tabular-nums; color:var(--brass);
+  }
+  .timer.free{ color:var(--teal); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+  .timer.rush{ color:var(--danger); animation:pulse 1s infinite; }
+  .quip{ margin-top:12px; font-size:13.5px; color:var(--dim); min-height:20px; }
+  .bar-wrap{ margin-top:26px; }
+  .bar-head{
+    display:flex; justify-content:space-between; font-size:10.5px;
+    letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--faint); font-family:'JetBrains Mono',monospace; margin-bottom:8px;
+  }
+  .bar{ height:4px; background:#1A1A1E; border-radius:99px; overflow:hidden; }
+  .bar-fill{
+    height:100%; width:0%; border-radius:99px;
+    background:linear-gradient(90deg,var(--brass),var(--teal));
+    transition:width 1s linear;
+  }
+  .meta{ margin-top:20px; font-size:11px; color:var(--faint); font-family:'JetBrains Mono',monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="sticker calm" id="sticker"><img src="cat.gif" alt="cat"></div>
+  <div class="label" id="label">Time until freedom</div>
+  <div class="timer" id="timer">--:--:--</div>
+  <div class="quip" id="quip"></div>
+  <div class="bar-wrap" id="barWrap">
+    <div class="bar-head"><span>Today's sentence</span><span id="pct">0%</span></div>
+    <div class="bar"><div class="bar-fill" id="fill"></div></div>
+  </div>
+  <div class="meta" id="meta"></div>
+</div>
+<script src="shared.js"></script>
+<script>
+window.applyQuip = t => document.getElementById('quip').textContent = t;
+window.applyState = s => {
+  document.getElementById('label').textContent = s.label;
+  document.getElementById('timer').textContent = s.timer;
+  document.getElementById('quip').textContent = s.quip;
+  document.getElementById('meta').textContent = s.meta;
+  const timer = document.getElementById('timer');
+  const sticker = document.getElementById('sticker');
+  const free = s.mode !== 'work';
+  const rush = s.phase === 'rush';
+  timer.className = 'timer' + (free ? ' free' : rush ? ' rush' : '');
+  sticker.className = 'sticker ' + (rush || s.phase === 'after' || s.phase === 'weekend' ? 'hyper' : s.phase === 'slump' || s.phase === 'before' ? 'sleepy' : 'calm');
+  document.getElementById('barWrap').style.display = s.pct === null ? 'none' : '';
+  if(s.pct !== null){
+    document.getElementById('fill').style.width = s.pct.toFixed(2) + '%';
+    document.getElementById('pct').textContent = s.pct.toFixed(1) + '%';
+  }
+};
+startEngine();
+</script>
+</body>
+</html>

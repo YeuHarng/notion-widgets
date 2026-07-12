@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Off-Work Countdown · Pick a design</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:#000; color:#eee; font-family:-apple-system,'Segoe UI',sans-serif; padding:20px; }
+  h1{ font-size:18px; margin-bottom:4px; }
+  p{ color:#888; font-size:13px; margin-bottom:18px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:18px; }
+  .cell h2{ font-size:14px; color:#D4A94E; margin-bottom:8px; font-weight:600; }
+  iframe{
+    width:100%; height:420px; border:1px solid #26272E; border-radius:14px; background:#000;
+  }
+  .controls{ margin-bottom:16px; display:flex; gap:8px; flex-wrap:wrap; }
+  .controls button{
+    background:#17181D; color:#ccc; border:1px solid #2C2D35; border-radius:8px;
+    padding:7px 14px; font-size:12.5px; cursor:pointer;
+  }
+  .controls button:hover{ background:#22232B; }
+</style>
+</head>
+<body>
+<h1>Off-Work Countdown — pick your favourite</h1>
+<p>Buttons switch the simulated time so you can see every mode in all three designs at once.</p>
+<div class="controls">
+  <button data-q="?day=1&now=09:30">Morning</button>
+  <button data-q="?day=1&now=14:30">Afternoon slump</button>
+  <button data-q="?day=1&now=17:40">Rush (last 20 min)</button>
+  <button data-q="?day=1&now=19:00">After work</button>
+  <button data-q="?day=1&now=07:50">Before work</button>
+  <button data-q="?day=6&now=12:00">Weekend</button>
+  <button data-q="">Real time (now)</button>
+</div>
+<div class="grid">
+  <div class="cell"><h2>V1 · Minimal</h2><iframe src="v1.html?day=1&now=14:30"></iframe></div>
+  <div class="cell"><h2>V2 · Terminal</h2><iframe src="v2.html?day=1&now=14:30"></iframe></div>
+  <div class="cell"><h2>V3 · Playful</h2><iframe src="v3.html?day=1&now=14:30"></iframe></div>
+</div>
+<script>
+document.querySelectorAll('.controls button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('iframe').forEach(f => {
+      const base = f.getAttribute('src').split('?')[0];
+      f.setAttribute('src', base + btn.dataset.q);
+    });
+  };
+});
+</script>
+</body>
+</html>
