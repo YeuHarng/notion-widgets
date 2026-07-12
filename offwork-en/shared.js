@@ -38,7 +38,7 @@ function fmt(ms){
 function nowSim(){
   const n = new Date();
   const sim = q.get('now');
-  if(sim){ const [h,m] = sim.split(':').map(Number); n.setHours(h, m||0, 0, 0); }
+  if(sim){ const [h,m] = sim.split(':').map(Number); n.setHours(h, m||0); /* keep real seconds so the clock still ticks in simulation */ }
   const simDay = q.get('day');
   if(simDay !== null){ n.setDate(n.getDate() + (parseInt(simDay) - n.getDay())); }
   return n;
