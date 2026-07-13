@@ -18,9 +18,9 @@
     background:#000; color:#F2F2F2;
     font-family:'Inter',-apple-system,sans-serif;
     display:flex; align-items:center; justify-content:center;
-    -webkit-font-smoothing:antialiased;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
   }
-  .wrap{ width:100%; max-width:400px; padding:32px 24px; text-align:center; }
+  .wrap{ width:400px; flex-shrink:0; padding:32px 24px; text-align:center; transform-origin:center center; }
   .sticker{
     width:104px; height:104px; margin:0 auto 18px; border-radius:50%;
     background:#FFF7EA; display:flex; align-items:center; justify-content:center;
@@ -59,18 +59,10 @@
     transition:width 1s linear;
   }
   .meta{ margin-top:20px; font-size:11px; color:var(--faint); font-family:'JetBrains Mono',monospace; }
-  /* compact mode for narrow embeds */
-  @media (max-width: 400px){
-    .wrap{ padding:18px 16px; }
-    .sticker{ width:80px; height:80px; margin-bottom:12px; }
-    .sticker img{ width:60px; height:60px; }
-    .bar-wrap{ margin-top:18px; }
-    .meta{ margin-top:14px; }
-  }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="scaler">
   <div class="sticker calm" id="sticker"><img src="cat.gif" alt="cat"></div>
   <div class="label" id="label">Time until freedom</div>
   <div class="timer" id="timer">--:--:--</div>
@@ -102,6 +94,19 @@ window.applyState = s => {
   }
 };
 startEngine();
+
+/* Scale the whole card to fill the embed, like an image */
+function autoScale(){
+  const el = document.getElementById('scaler');
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const s = Math.min(vw / el.offsetWidth, vh / el.offsetHeight) * 0.95;
+  el.style.transform = 'scale(' + s + ')';
+}
+addEventListener('resize', autoScale);
+new ResizeObserver(autoScale).observe(document.documentElement);
+setInterval(autoScale, 800); /* fallback for webviews that fire no resize events */
+autoScale();
+setTimeout(autoScale, 300);
 </script>
 </body>
 </html>

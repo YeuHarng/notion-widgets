@@ -26,11 +26,11 @@
   body{
     font-family:var(--font-body); background:var(--bg); color:var(--text);
     display:flex; align-items:center; justify-content:center;
-    -webkit-font-smoothing:antialiased;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
   }
   .card{
-    width:100%; max-width:420px; padding:28px 26px;
-    text-align:center;
+    width:420px; flex-shrink:0; padding:28px 26px;
+    text-align:center; transform-origin:center center;
   }
   .label{
     font-size:12px; letter-spacing:0.18em; text-transform:uppercase;
@@ -68,7 +68,7 @@
 </style>
 </head>
 <body>
-<div class="card">
+<div class="card" id="scaler">
   <div class="label" id="label">距离下班还有</div>
   <div class="timer" id="timer">--:--:--</div>
   <div class="quip" id="quip"></div>
@@ -190,6 +190,19 @@ function tick(){
 tick();
 setInterval(tick, 1000);
 setInterval(rotateQuip, 15000);
+
+/* Scale the whole card to fill the embed, like an image */
+function autoScale(){
+  const el = document.getElementById('scaler');
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const s = Math.min(vw / el.offsetWidth, vh / el.offsetHeight) * 0.95;
+  el.style.transform = 'scale(' + s + ')';
+}
+addEventListener('resize', autoScale);
+new ResizeObserver(autoScale).observe(document.documentElement);
+setInterval(autoScale, 800); /* fallback for webviews that fire no resize events */
+autoScale();
+setTimeout(autoScale, 300);
 </script>
 </body>
 </html>

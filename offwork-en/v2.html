@@ -18,15 +18,16 @@
     background:#000; color:var(--green);
     font-family:'JetBrains Mono',monospace;
     display:flex; align-items:center; justify-content:center;
-    -webkit-font-smoothing:antialiased;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
     background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
     background-size:28px 28px;
   }
   .frame{
-    width:100%; max-width:430px; margin:14px; padding:22px 24px 20px;
+    width:430px; flex-shrink:0; padding:22px 24px 20px;
     border:1px solid #1E4A32; border-radius:10px;
     background:rgba(0,0,0,0.82);
     box-shadow:0 0 26px rgba(61,240,140,0.09), inset 0 0 40px rgba(61,240,140,0.04);
+    transform-origin:center center;
   }
   .titlebar{
     display:flex; align-items:center; gap:7px; margin-bottom:16px;
@@ -63,20 +64,10 @@
   .asciibar .pct{ color:var(--amber); margin-left:8px; font-size:12px; }
   .meta{ margin-top:12px; font-size:10.5px; color:var(--dim); }
   .meta::before{ content:'$ '; }
-  /* compact mode for narrow embeds (Notion side columns) */
-  @media (max-width: 400px){
-    .frame{ margin:8px; padding:14px 16px 12px; }
-    .titlebar{ margin-bottom:10px; }
-    .row{ gap:12px; }
-    .cat{ width:62px; height:62px; }
-    .cat img{ width:46px; height:46px; }
-    .asciibar{ margin-top:12px; font-size:11px; }
-    .meta{ margin-top:8px; }
-  }
 </style>
 </head>
 <body>
-<div class="frame">
+<div class="frame" id="scaler">
   <div class="titlebar">
     <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
     <span>offwork.sh</span>
@@ -111,6 +102,19 @@ window.applyState = s => {
   bar.innerHTML = '[<span class="done">' + '█'.repeat(done) + '</span><span class="todo">' + '░'.repeat(BLOCKS - done) + '</span>]<span class="pct">' + s.pct.toFixed(1) + '%</span>';
 };
 startEngine();
+
+/* Scale the whole card to fill the embed, like an image */
+function autoScale(){
+  const el = document.getElementById('scaler');
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const s = Math.min(vw / el.offsetWidth, vh / el.offsetHeight) * 0.95;
+  el.style.transform = 'scale(' + s + ')';
+}
+addEventListener('resize', autoScale);
+new ResizeObserver(autoScale).observe(document.documentElement);
+setInterval(autoScale, 800); /* fallback for webviews that fire no resize events */
+autoScale();
+setTimeout(autoScale, 300); /* re-measure after fonts load */
 </script>
 </body>
 </html>
