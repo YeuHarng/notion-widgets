@@ -336,6 +336,7 @@ let state = {
   openSync: false,
   syncBusy: false,
   syncError: '',
+  syncPendingMerge: null, // {extraCount, code} while awaiting merge/discard/cancel decision
 };
 
 function render(){
@@ -413,21 +414,33 @@ async function pushToGist(){
   await gistApi('PATCH', '/gists/' + cfg.gistId, cfg, { files: { [SYNC_FILE]: { content } } });
 }
 
-async function connectSync(input){
+async function connectSync(input, mergeChoice){
+  // mergeChoice: undefined = not decided yet, 'merge' = keep local-only entries too,
+  // 'discard' = drop local entries and just adopt the target vault as-is.
   const code = parseSyncCode(input);
   if(code){
-    // joining from another device: adopt the shared vault, keep any local-only entries
-    state.sync = code;
     const localEntries = state.vault.entries;
-    await pullFromGist();
-    const extra = localEntries.filter(l => !state.vault.entries.some(g => g.id === l.id));
-    if(extra.length){
-      state.vault.entries = state.vault.entries.concat(extra);
+    const gist = await gistApi('GET', '/gists/' + code.gistId, code);
+    const remoteVault = await decryptJson(gist.files[SYNC_FILE].content, code.key);
+    const extra = localEntries.filter(l => !remoteVault.entries.some(g => g.id === l.id));
+
+    // Connecting to a code from a DIFFERENT vault than what's currently loaded
+    // (e.g. pasting the other space's code by mistake) would otherwise silently
+    // merge the two vaults together. Ask first whenever there's anything to merge.
+    if(extra.length && mergeChoice === undefined){
+      return { needsDecision: true, extraCount: extra.length, code };
+    }
+
+    state.sync = code;
+    state.vault = (mergeChoice === 'merge' && extra.length)
+      ? { entries: remoteVault.entries.concat(extra) }
+      : remoteVault;
+    await window.storage.set(DATA_KEY, JSON.stringify(state.vault), false);
+    if(mergeChoice === 'merge' && extra.length){
       await pushToGist();
-      await window.storage.set(DATA_KEY, JSON.stringify(state.vault), false);
     }
     saveSyncCfg(code);
-    return;
+    return { needsDecision: false };
   }
   // first device: treat input as a GitHub token, create the gist
   const cfg = { token: input, key: b64(crypto.getRandomValues(new Uint8Array(32))), gistId: null };
@@ -515,12 +528,24 @@ function mainScreen(){
 
 function renderSyncModal(){
   const cfg = state.sync;
+  const spaceLabel = SPACE ? `"${escapeHtml(SPACE)}" space` : 'personal (default) space';
   let body;
-  if(!cfg){
+  if(state.syncPendingMerge){
+    const n = state.syncPendingMerge.extraCount;
     body = `
-      <p class="sync-p">Sync your accounts across devices through a private GitHub Gist. Data is encrypted before it leaves this browser.</p>
+      <p class="sync-p" style="color:var(--danger)"><b>Heads up:</b> this code belongs to a different vault than what's currently loaded here.</p>
+      <p class="sync-p">You have <b>${n} local ${n===1?'entry':'entries'}</b> that ${n===1?"isn't":"aren't"} in that vault. Merging ${n===1?'it':'them'} in will add ${n===1?'it':'them'} to that vault permanently — don't do this unless you're sure these two should actually share one list.</p>
+      <div class="err">${state.syncError}</div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="cancelMergeBtn">Cancel</button>
+        <button class="btn btn-ghost" id="discardMergeBtn">Just use their list (discard mine)</button>
+        <button class="btn btn-primary" id="confirmMergeBtn">Merge (${n} entries)</button>
+      </div>`;
+  } else if(!cfg){
+    body = `
+      <p class="sync-p">You're in the <b>${spaceLabel}</b>. Sync your accounts across devices through a private GitHub Gist. Data is encrypted before it leaves this browser.</p>
       <p class="sync-p"><b>First device:</b> paste a GitHub token. Create one at <b>github.com/settings/tokens</b> → Generate new token (classic) → tick only <b>gist</b>.</p>
-      <p class="sync-p"><b>Other devices:</b> paste the sync code shown after connecting.</p>
+      <p class="sync-p"><b>Other devices:</b> paste the sync code shown after connecting. <b>Only ever paste this space's own code here</b> — pasting a different space's code will try to merge the two vaults.</p>
       <div class="field"><label>GitHub token or sync code</label><input type="password" id="syncInput" placeholder="ghp_… or VSYNC1.…" autocomplete="off"></div>
       <div class="err">${state.syncError}</div>
       <div class="modal-actions">
@@ -529,8 +554,8 @@ function renderSyncModal(){
       </div>`;
   } else {
     body = `
-      <p class="sync-p">Status: ${state.syncStatus==='error' ? '<span style="color:var(--danger)">last sync failed — check your connection or token</span>' : '<span style="color:var(--teal)">connected</span>'} · syncs when you open the widget and on every save.</p>
-      <p class="sync-p">Paste this sync code once in the widget on each of your other devices. <b>Keep it secret</b> — anyone with it can read your accounts.</p>
+      <p class="sync-p">Status: ${state.syncStatus==='error' ? '<span style="color:var(--danger)">last sync failed — check your connection or token</span>' : '<span style="color:var(--teal)">connected</span>'} · <b>${spaceLabel}</b> · syncs when you open the widget and on every save.</p>
+      <p class="sync-p">Paste this sync code once in the widget on each of your other devices. <b>Keep it secret</b> — anyone with it can read your accounts. <b>Only paste it into the ${spaceLabel} vault</b>, never into a different space.</p>
       <div class="field"><textarea id="syncCodeBox" readonly rows="4">${syncCode(cfg)}</textarea></div>
       <p class="sync-p"><b>On phones</b>, embed this URL instead — it carries the sync code, so the app never asks again even if it clears its storage:</p>
       <div class="field"><textarea id="embedUrlBox" readonly rows="4">${location.origin + location.pathname + location.search + '#' + syncCode(cfg)}</textarea></div>
@@ -678,16 +703,55 @@ function bindMainEvents(){
 
   if(state.openSync){
     const syncOverlay = document.getElementById('syncOverlay');
-    syncOverlay.onclick = (ev)=>{ if(ev.target.id === 'syncOverlay'){ state.openSync = false; render(); } };
-    document.getElementById('closeSync').onclick = ()=>{ state.openSync = false; render(); };
+    syncOverlay.onclick = (ev)=>{ if(ev.target.id === 'syncOverlay'){ state.openSync = false; state.syncPendingMerge = null; render(); } };
+    const closeBtn = document.getElementById('closeSync');
+    if(closeBtn) closeBtn.onclick = ()=>{ state.openSync = false; state.syncPendingMerge = null; render(); };
+
+    if(state.syncPendingMerge){
+      document.getElementById('cancelMergeBtn').onclick = ()=>{
+        state.syncPendingMerge = null; state.syncError = ''; render();
+      };
+      document.getElementById('discardMergeBtn').onclick = async ()=>{
+        const { code } = state.syncPendingMerge;
+        state.syncBusy = true; render();
+        try{
+          await connectSync(syncCode(code), 'discard');
+          state.syncPendingMerge = null; state.syncBusy = false; state.syncStatus = 'ok';
+          render(); showToast('Sync connected — kept their list only');
+        }catch(e){
+          state.syncBusy = false; state.syncPendingMerge = null;
+          state.syncError = 'Could not connect — try again.'; render();
+        }
+      };
+      document.getElementById('confirmMergeBtn').onclick = async ()=>{
+        const { code } = state.syncPendingMerge;
+        state.syncBusy = true; render();
+        try{
+          await connectSync(syncCode(code), 'merge');
+          state.syncPendingMerge = null; state.syncBusy = false; state.syncStatus = 'ok';
+          render(); showToast('Sync connected — merged local entries in');
+        }catch(e){
+          state.syncBusy = false; state.syncPendingMerge = null;
+          state.syncError = 'Could not connect — try again.'; render();
+        }
+      };
+      return;
+    }
+
     const connectBtn = document.getElementById('connectSyncBtn');
     if(connectBtn) connectBtn.onclick = async ()=>{
       const input = document.getElementById('syncInput').value.trim();
       if(!input){ state.syncError = 'Paste a token or sync code first.'; render(); return; }
       state.syncBusy = true; state.syncError = ''; render();
       try{
-        await connectSync(input);
-        state.syncBusy = false; state.syncStatus = 'ok';
+        const result = await connectSync(input);
+        state.syncBusy = false;
+        if(result && result.needsDecision){
+          state.syncPendingMerge = { extraCount: result.extraCount, code: result.code };
+          render();
+          return;
+        }
+        state.syncStatus = 'ok';
         render(); showToast('Sync connected');
       }catch(e){
         state.syncBusy = false; state.sync = null; localStorage.removeItem(SYNC_KEY);
