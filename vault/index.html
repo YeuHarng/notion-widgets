@@ -444,6 +444,13 @@ async function connectSync(input){
 
 async function boot(){
   state.sync = loadSyncCfg();
+  // Fallback: adopt a sync code carried in the URL hash (#VSYNC1.…).
+  // Mobile Notion apps often wipe embed localStorage between sessions;
+  // the embed URL lives in the Notion page itself, so it survives.
+  if(!state.sync){
+    const hashCfg = parseSyncCode(decodeURIComponent(location.hash.slice(1)));
+    if(hashCfg){ state.sync = hashCfg; saveSyncCfg(hashCfg); }
+  }
   try{
     const existing = await window.storage.get(DATA_KEY, false);
     if(existing && existing.value){
@@ -525,9 +532,12 @@ function renderSyncModal(){
       <p class="sync-p">Status: ${state.syncStatus==='error' ? '<span style="color:var(--danger)">last sync failed — check your connection or token</span>' : '<span style="color:var(--teal)">connected</span>'} · syncs when you open the widget and on every save.</p>
       <p class="sync-p">Paste this sync code once in the widget on each of your other devices. <b>Keep it secret</b> — anyone with it can read your accounts.</p>
       <div class="field"><textarea id="syncCodeBox" readonly rows="4">${syncCode(cfg)}</textarea></div>
+      <p class="sync-p"><b>On phones</b>, embed this URL instead — it carries the sync code, so the app never asks again even if it clears its storage:</p>
+      <div class="field"><textarea id="embedUrlBox" readonly rows="4">${location.origin + location.pathname + location.search + '#' + syncCode(cfg)}</textarea></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="disconnectSyncBtn">Disconnect</button>
         <button class="btn btn-ghost" id="copySyncBtn">Copy code</button>
+        <button class="btn btn-ghost" id="copyEmbedBtn">Copy URL</button>
         <button class="btn btn-primary" id="closeSync">Done</button>
       </div>`;
   }
@@ -687,6 +697,8 @@ function bindMainEvents(){
     };
     const copyBtn = document.getElementById('copySyncBtn');
     if(copyBtn) copyBtn.onclick = async ()=>{ showToast(await copyText(syncCode(state.sync)) ? 'Sync code copied' : 'Copy blocked — select the code and copy manually'); };
+    const copyEmbedBtn = document.getElementById('copyEmbedBtn');
+    if(copyEmbedBtn) copyEmbedBtn.onclick = async ()=>{ showToast(await copyText(document.getElementById('embedUrlBox').value) ? 'Embed URL copied' : 'Copy blocked — select the URL and copy manually'); };
     const discBtn = document.getElementById('disconnectSyncBtn');
     if(discBtn) discBtn.onclick = ()=>{
       localStorage.removeItem(SYNC_KEY);

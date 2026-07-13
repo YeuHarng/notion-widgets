@@ -63,6 +63,16 @@
   .asciibar .pct{ color:var(--amber); margin-left:8px; font-size:12px; }
   .meta{ margin-top:12px; font-size:10.5px; color:var(--dim); }
   .meta::before{ content:'$ '; }
+  /* compact mode for narrow embeds (Notion side columns) */
+  @media (max-width: 400px){
+    .frame{ margin:8px; padding:14px 16px 12px; }
+    .titlebar{ margin-bottom:10px; }
+    .row{ gap:12px; }
+    .cat{ width:62px; height:62px; }
+    .cat img{ width:46px; height:46px; }
+    .asciibar{ margin-top:12px; font-size:11px; }
+    .meta{ margin-top:8px; }
+  }
 </style>
 </head>
 <body>

@@ -59,6 +59,14 @@
     transition:width 1s linear;
   }
   .meta{ margin-top:20px; font-size:11px; color:var(--faint); font-family:'JetBrains Mono',monospace; }
+  /* compact mode for narrow embeds */
+  @media (max-width: 400px){
+    .wrap{ padding:18px 16px; }
+    .sticker{ width:80px; height:80px; margin-bottom:12px; }
+    .sticker img{ width:60px; height:60px; }
+    .bar-wrap{ margin-top:18px; }
+    .meta{ margin-top:14px; }
+  }
 </style>
 </head>
 <body>
